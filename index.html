@@ -77,21 +77,17 @@ body { font-family: system-ui; }
 </div>
 </div>
 
-<!-- Roth Projection -->
-<div class="bg-white p-4 rounded-xl shadow mb-4">
-<h3 class="font-bold mb-2">Roth Growth Projection (7% annual)</h3>
-<p id="projection" class="text-lg font-bold"></p>
-</div>
-
 <!-- Weekly Log -->
 <div class="bg-white p-4 rounded-xl shadow mb-4">
 <h3 class="font-bold mb-2">Weekly Log</h3>
 <div id="weeklyLog"></div>
 </div>
 
-<!-- CSV Export -->
-<div class="text-center mb-6">
-<button onclick="exportCSV()" class="bg-purple-600 text-white px-6 py-2 rounded font-bold">Export CSV</button>
+<!-- Undo / Reset / Export -->
+<div class="flex justify-around mb-6">
+<button onclick="undo()" class="bg-yellow-500 text-white px-4 py-2 rounded font-bold">Undo</button>
+<button onclick="resetAll()" class="bg-red-600 text-white px-4 py-2 rounded font-bold">Reset All</button>
+<button onclick="exportCSV()" class="bg-purple-600 text-white px-4 py-2 rounded font-bold">Export CSV</button>
 </div>
 
 </div>
@@ -104,7 +100,7 @@ let data = { entries:[], history:[], weekChecks:{}, paychecks:{} };
 function save(){ localStorage.setItem("summerBudget", JSON.stringify(data)); }
 function load(){ const saved = localStorage.getItem("summerBudget"); if(saved) data = JSON.parse(saved); render(); }
 
-// Preview Allocation
+// Allocate paycheck preview
 function allocatePaycheck(){
   const pay = parseFloat(document.getElementById("payInput").value);
   if(!pay) return;
@@ -120,105 +116,97 @@ function allocatePaycheck(){
 
 // Undo
 function undo(){ 
-if(data.history.length===0) return alert("Nothing to undo");
-data = JSON.parse(data.history.pop());
-save(); render();
+  if(data.history.length===0) return alert("Nothing to undo");
+  data = JSON.parse(data.history.pop());
+  save(); render();
 }
 
 // Reset
 function resetAll(){ 
-if(!confirm("Clear all data?")) return;
-data={ entries:[], history:[], weekChecks:{}, paychecks:{} };
-save(); render();
+  if(!confirm("Clear all data?")) return;
+  data={ entries:[], history:[], weekChecks:{}, paychecks:{} };
+  save(); render();
 }
 
 // Add Entry
 function addEntry(){
-const amount=parseFloat(document.getElementById("amount").value);
-const note=document.getElementById("note").value;
-const date=document.getElementById("date").value;
-const category=document.getElementById("category").value;
-if(!amount || !date) return;
-data.history.push(JSON.stringify(data));
-data.entries.push({amount,note,date,category});
-save(); render();
+  const amount=parseFloat(document.getElementById("amount").value);
+  const note=document.getElementById("note").value;
+  const date=document.getElementById("date").value;
+  const category=document.getElementById("category").value;
+  if(!amount || !date) return;
+  data.history.push(JSON.stringify(data));
+  data.entries.push({amount,note,date,category});
+  save(); render();
 }
 
 // Toggle week check
 function toggleCheck(weekId, type){
-data.weekChecks[weekId] = data.weekChecks[weekId] || {};
-data.weekChecks[weekId][type] = !data.weekChecks[weekId][type];
-save(); render();
+  data.weekChecks[weekId] = data.weekChecks[weekId] || {};
+  data.weekChecks[weekId][type] = !data.weekChecks[weekId][type];
+  save(); render();
 }
 
 // Add paycheck for week
 function addPaycheck(weekId){
-const val = parseFloat(document.getElementById('pay-'+weekId).value);
-if(!val) return;
-data.paychecks[weekId] = val;
-save(); render();
+  const val = parseFloat(document.getElementById('pay-'+weekId).value);
+  if(!val) return;
+  data.paychecks[weekId] = val;
+  save(); render();
 }
 
-// Render
+// Render everything
 let spendingChart, investChart;
 function render(){
-// Calculate totals
-let totalNeeds = data.entries.filter(e=>e.category==="needs").reduce((s,e)=>s+e.amount,0);
-let totalWants = data.entries.filter(e=>e.category==="wants").reduce((s,e)=>s+e.amount,0);
-let totalRoth = data.entries.filter(e=>e.category==="roth").reduce((s,e)=>s+e.amount,0);
-let totalHysa = data.entries.filter(e=>e.category==="hysa").reduce((s,e)=>s+e.amount,0);
+  // Calculate totals
+  let totalNeeds = data.entries.filter(e=>e.category==="needs").reduce((s,e)=>s+e.amount,0);
+  let totalWants = data.entries.filter(e=>e.category==="wants").reduce((s,e)=>s+e.amount,0);
+  let totalRoth = data.entries.filter(e=>e.category==="roth").reduce((s,e)=>s+e.amount,0);
+  let totalHysa = data.entries.filter(e=>e.category==="hysa").reduce((s,e)=>s+e.amount,0);
 
-// Summary
-document.getElementById("summary").innerHTML=`
+  // Summary
+  document.getElementById("summary").innerHTML=`
 <div class="bg-white p-4 rounded shadow"><h3 class="font-bold">Wants</h3><p>$${totalWants.toFixed(2)}</p></div>
 <div class="bg-white p-4 rounded shadow"><h3 class="font-bold">Needs</h3><p>$${totalNeeds.toFixed(2)}</p></div>
 <div class="bg-white p-4 rounded shadow"><h3 class="font-bold">Roth</h3><p>$${totalRoth.toFixed(2)}</p></div>
 <div class="bg-white p-4 rounded shadow"><h3 class="font-bold">HYSA</h3><p>$${totalHysa.toFixed(2)}</p></div>
 `;
 
-updateCharts();
-updateProjection();
-updateWeekly();
+  // Charts
+  updateCharts(totalNeeds,totalWants,totalRoth,totalHysa);
+
+  // Weekly Log
+  updateWeekly();
 }
 
 // Charts
-function updateCharts(){
-const totalNeeds = data.entries.filter(e=>e.category==="needs").reduce((s,e)=>s+e.amount,0);
-const totalWants = data.entries.filter(e=>e.category==="wants").reduce((s,e)=>s+e.amount,0);
-const totalRoth = data.entries.filter(e=>e.category==="roth").reduce((s,e)=>s+e.amount,0);
-const totalHysa = data.entries.filter(e=>e.category==="hysa").reduce((s,e)=>s+e.amount,0);
-
-if(spendingChart) spendingChart.destroy();
-if(investChart) investChart.destroy();
-spendingChart = new Chart(document.getElementById("spendingChart"),{type:"pie",data:{labels:["Needs","Wants"],datasets:[{data:[totalNeeds,totalWants],backgroundColor:["#3b82f6","#f59e0b"]}]},options:{responsive:true}});
-investChart = new Chart(document.getElementById("investChart"),{type:"pie",data:{labels:["Roth","HYSA"],datasets:[{data:[totalRoth,totalHysa],backgroundColor:["#10b981","#8b5cf6"]}]},options:{responsive:true}});
+function updateCharts(totalNeeds,totalWants,totalRoth,totalHysa){
+  if(spendingChart) spendingChart.destroy();
+  if(investChart) investChart.destroy();
+  spendingChart = new Chart(document.getElementById("spendingChart"),{type:"pie",data:{labels:["Needs","Wants"],datasets:[{data:[totalNeeds,totalWants],backgroundColor:["#3b82f6","#f59e0b"]}]},options:{responsive:true}});
+  investChart = new Chart(document.getElementById("investChart"),{type:"pie",data:{labels:["Roth","HYSA"],datasets:[{data:[totalRoth,totalHysa],backgroundColor:["#10b981","#8b5cf6"]}]},options:{responsive:true}});
 }
 
-// Roth Projection
-function updateProjection(){
-const totalRoth = data.entries.filter(e=>e.category==="roth").reduce((s,e)=>s+e.amount,0);
-const future = totalRoth*Math.pow(1+0.07,40);
-document.getElementById("projection").innerText = `$${future.toFixed(0)} at age ~60`;
-}
-
-// Weekly Log
+// Weekly log
 function updateWeekly(){
-let start = new Date("2026-03-01");
-let end = new Date("2026-08-31");
-let weeksHTML = "";
+  const start = new Date("2026-03-01");
+  const end = new Date("2026-08-31");
+  let current = new Date(start);
+  let weeksHTML = "";
 
-while(start<=end){
-let weekStart = new Date(start);
-let weekEnd = new Date(start); weekEnd.setDate(weekEnd.getDate()+6);
-let weekId = weekStart.toISOString().slice(0,10);
+  while(current <= end){
+    let weekStart = new Date(current);
+    let weekEnd = new Date(current); weekEnd.setDate(weekEnd.getDate()+6);
+    let weekId = weekStart.toISOString().slice(0,10);
 
-let weekEntries = data.entries.filter(e=>{
-    let d = new Date(e.date).setHours(0,0,0,0);
-    return d >= weekStart.setHours(0,0,0,0) && d <= weekEnd.setHours(0,0,0,0);
-});
-let totalSpent = weekEntries.filter(e=>e.category==="needs" || e.category==="wants").reduce((s,e)=>s+e.amount,0);
+    let weekEntries = data.entries.filter(e=>{
+      const d = new Date(e.date);
+      return d >= weekStart && d <= weekEnd;
+    });
 
-weeksHTML += `<div class="border-b py-2 mb-2">
+    let totalSpent = weekEntries.filter(e=>e.category==="needs" || e.category==="wants").reduce((s,e)=>s+e.amount,0);
+
+    weeksHTML += `<div class="border-b py-2 mb-2">
 <h4 class="font-bold">Week of ${weekStart.toLocaleDateString()}</h4>
 <p class="text-sm text-gray-600 mb-1">Weekly Paycheck: $<input type="number" id="pay-${weekId}" value="${data.paychecks[weekId]||''}" class="border p-1 w-32 inline-block" onblur="addPaycheck('${weekId}')"></p>
 <p class="text-sm text-gray-600 mb-1">Total Spent: $${totalSpent.toFixed(2)}</p>
@@ -231,22 +219,22 @@ ${weekEntries.map(e=>`<li>${e.date} — $${e.amount.toFixed(2)} (${e.category})<
 </ul>
 </div>`;
 
-start.setDate(start.getDate()+7);
+    current.setDate(current.getDate()+7);
+  }
+
+  document.getElementById("weeklyLog").innerHTML = weeksHTML;
 }
 
-document.getElementById("weeklyLog").innerHTML = weeksHTML;
-}
-
-// CSV Export
+// Export CSV
 function exportCSV(){
-let csv = "Date,Category,Amount,Note\n";
-data.entries.forEach(e=>{ csv+=`${e.date},${e.category},${e.amount},"${e.note}"\n`; });
-const blob = new Blob([csv],{type:"text/csv"});
-const url = URL.createObjectURL(blob);
-const a=document.createElement("a"); a.href=url; a.download="entries.csv"; a.click();
+  let csv = "Date,Category,Amount,Note\n";
+  data.entries.forEach(e=>{ csv+=`${e.date},${e.category},${e.amount},"${e.note}"\n`; });
+  const blob = new Blob([csv],{type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+  const a=document.createElement("a"); a.href=url; a.download="entries.csv"; a.click();
 }
 
-// Initialize
+// Init
 load();
 </script>
 
