@@ -213,8 +213,8 @@ let weekEnd = new Date(start); weekEnd.setDate(weekEnd.getDate()+6);
 let weekId = weekStart.toISOString().slice(0,10);
 
 let weekEntries = data.entries.filter(e=>{
-    let d = new Date(e.date);
-    return d>=weekStart && d<=weekEnd;
+    let d = new Date(e.date).setHours(0,0,0,0);
+    return d >= weekStart.setHours(0,0,0,0) && d <= weekEnd.setHours(0,0,0,0);
 });
 let totalSpent = weekEntries.filter(e=>e.category==="needs" || e.category==="wants").reduce((s,e)=>s+e.amount,0);
 
