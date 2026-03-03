@@ -112,6 +112,11 @@ const needsPct=parseFloat(document.getElementById("needsPct").value)/100;
 const hysaPct=parseFloat(document.getElementById("hysaPct").value)/100;
 
 const wealth = pay*(1-wantsPct-needsPct);
+data.entries.push({amount: pay*wantsPct, note:"Paycheck Wants", date: new Date().toISOString().slice(0,10), category:"wants"});
+data.entries.push({amount: pay*needsPct, note:"Paycheck Needs", date: new Date().toISOString().slice(0,10), category:"needs"});
+data.entries.push({amount: wealth*hysaPct, note:"Paycheck HYSA", date: new Date().toISOString().slice(0,10), category:"hysa"});
+data.entries.push({amount: wealth*(1-hysaPct), note:"Paycheck Roth", date: new Date().toISOString().slice(0,10), category:"roth"});
+
 data.wants += pay*wantsPct;
 data.needs += pay*needsPct;
 data.hysa += wealth*hysaPct;
@@ -145,9 +150,8 @@ data.history.push(JSON.stringify(data));
 
 if(category==="roth" || category==="hysa"){
 data[category] += amount; // treat as investment
-} else {
-data[category] -= amount; // expense
 }
+// Expenses are just recorded; no subtraction from wants/needs
 data.entries.push({amount,note,date,category});
 save(); render();
 }
@@ -178,10 +182,13 @@ updateWeekly();
 function updateCharts(){
 const totalNeeds = data.entries.filter(e=>e.category==="needs").reduce((s,e)=>s+e.amount,0);
 const totalWants = data.entries.filter(e=>e.category==="wants").reduce((s,e)=>s+e.amount,0);
+const totalRoth = data.entries.filter(e=>e.category==="roth").reduce((s,e)=>s+e.amount,0);
+const totalHysa = data.entries.filter(e=>e.category==="hysa").reduce((s,e)=>s+e.amount,0);
+
 if(spendingChart) spendingChart.destroy();
 if(investChart) investChart.destroy();
 spendingChart = new Chart(document.getElementById("spendingChart"),{type:"pie",data:{labels:["Needs","Wants"],datasets:[{data:[totalNeeds,totalWants],backgroundColor:["#3b82f6","#f59e0b"]}]},options:{responsive:true}});
-investChart = new Chart(document.getElementById("investChart"),{type:"pie",data:{labels:["Roth","HYSA"],datasets:[{data:[data.roth,data.hysa],backgroundColor:["#10b981","#8b5cf6"]}]},options:{responsive:true}});
+investChart = new Chart(document.getElementById("investChart"),{type:"pie",data:{labels:["Roth","HYSA"],datasets:[{data:[totalRoth,totalHysa],backgroundColor:["#10b981","#8b5cf6"]}]},options:{responsive:true}});
 }
 
 // Roth Projection
@@ -201,8 +208,11 @@ let weekStart = new Date(start);
 let weekEnd = new Date(start); weekEnd.setDate(weekEnd.getDate()+6);
 let weekId = weekStart.toISOString().slice(0,10);
 
-let weekEntries = data.entries.filter(e=>{let d=new Date(e.date); return d>=weekStart && d<=weekEnd;});
-let totalSpent = weekEntries.reduce((s,e)=> s+ (e.category==="needs"||e.category==="wants"? e.amount:0),0);
+let weekEntries = data.entries.filter(e=>{
+    let d = new Date(e.date);
+    return d>=weekStart && d<=weekEnd;
+});
+let totalSpent = weekEntries.filter(e=>e.category==="needs" || e.category==="wants").reduce((s,e)=>s+e.amount,0);
 
 weeksHTML += `<div class="border-b py-2">
 <h4 class="font-bold">Week of ${weekStart.toLocaleDateString()}</h4>
@@ -212,7 +222,7 @@ weeksHTML += `<div class="border-b py-2">
 <span class="checkbox ${data.weekChecks[weekId]?.hysa?"checked":""}" onclick="toggleCheck('${weekId}','hysa')">✅</span> HYSA
 </p>
 <ul class="text-sm mt-1 space-y-1">
-${weekEntries.map(e=>`<li>${e.date} — $${e.amount.toFixed(2)} (${e.category})<br><span class="text-gray-500">${e.note}</span></li>`).join("")}
+${weekEntries.map((e,i)=>`<li>${e.date} — $${e.amount.toFixed(2)} (${e.category})<br><span class="text-gray-500">${e.note}</span></li>`).join("")}
 </ul>
 </div>`;
 
